@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>영업/PM E2E 트래킹 대시보드</title>
+<style>
+  :root{
+    --bg:#f1f3f7; --panel:#e6e9f0; --card:#fff; --text:#1f2430; --sub:#6b7385; --line:#d5d9e3;
+    --primary:#3b5bdb; --yellow-bg:#fff6cc; --yellow-bd:#f2c200; --red-bg:#ffe0e0; --red-bd:#e03131;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Pretendard","Malgun Gothic","Apple SD Gothic Neo",sans-serif;background:var(--bg);color:var(--text)}
+  header{padding:14px 20px;background:#1f2a44;color:#fff;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+  header h1{font-size:18px;margin:0}
+  header .today{font-size:12px;opacity:.75}
+  .toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  button,select,input,textarea{font:inherit}
+  .btn{border:0;border-radius:6px;padding:8px 12px;cursor:pointer;background:#fff;color:#1f2a44;font-weight:600}
+  .btn.primary{background:var(--primary);color:#fff}
+  .btn.danger{background:#e03131;color:#fff}
+  .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--text)}
+  .toolbar input,.toolbar select{padding:7px 9px;border-radius:6px;border:0}
+  .summary{display:flex;gap:10px;padding:12px 20px;flex-wrap:wrap}
+  .chip{background:#fff;border-radius:8px;padding:8px 14px;font-size:13px;border:1px solid var(--line)}
+  .chip b{font-size:18px;margin-left:6px}
+  .chip.red{border-color:var(--red-bd);background:var(--red-bg)}
+  .chip.yellow{border-color:var(--yellow-bd);background:var(--yellow-bg)}
+  .board{display:grid;grid-template-columns:repeat(5,minmax(240px,1fr));gap:12px;padding:0 20px 24px;overflow-x:auto}
+  .col{background:var(--panel);border-radius:10px;display:flex;flex-direction:column;min-height:60vh}
+  .col h2{margin:0;padding:12px;font-size:14px;border-bottom:1px solid var(--line)}
+  .col h2 small{display:block;color:var(--sub);font-weight:400;font-size:11px;margin-top:3px}
+  .col h2 .cnt{float:right;background:#fff;border-radius:10px;padding:1px 8px;font-size:12px}
+  .dropzone{flex:1;padding:10px;display:flex;flex-direction:column;gap:10px}
+  .dropzone.over{background:#d6defa}
+  .card{background:var(--card);border-radius:8px;padding:10px;border-left:6px solid #adb5bd;box-shadow:0 1px 3px rgba(0,0,0,.12);cursor:grab;font-size:13px}
+  .card.dragging{opacity:.4}
+  .card.yellow{background:var(--yellow-bg);border-left-color:var(--yellow-bd)}
+  .card.red{background:var(--red-bg);border-left-color:var(--red-bd)}
+  .card.done{opacity:.6;border-left-color:#2f9e44}
+  .card .buyer{font-weight:700;font-size:14px}
+  .card .prod{color:var(--sub);margin-bottom:6px}
+  .row{display:flex;justify-content:space-between;gap:6px;align-items:center;margin-top:4px}
+  .badge{display:inline-block;font-size:11px;padding:2px 7px;border-radius:10px;background:#e9ecef}
+  .badge.dept{background:#dbe4ff;color:#2b3f9e;font-weight:600}
+  .badge.d-red{background:var(--red-bd);color:#fff}
+  .badge.d-yellow{background:var(--yellow-bd);color:#222}
+  .badge.d-ok{background:#d3f9d8;color:#2b8a3e}
+  .memo{margin-top:6px;white-space:pre-wrap;background:rgba(0,0,0,.04);border-radius:5px;padding:6px;font-size:12px;max-height:90px;overflow:auto}
+  .empty{color:var(--sub);font-size:12px;text-align:center;padding:14px}
+  /* modal */
+  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:10}
+  .modal-bg.show{display:flex}
+  .modal{background:#fff;border-radius:12px;padding:20px;width:min(480px,94vw);max-height:92vh;overflow:auto}
+  .modal h3{margin:0 0 12px}
+  .modal label{display:block;font-size:12px;font-weight:700;margin:10px 0 4px;color:var(--sub)}
+  .modal input[type=text],.modal input[type=date],.modal select,.modal textarea{width:100%;padding:8px;border:1px solid var(--line);border-radius:6px}
+  .modal textarea{min-height:90px;resize:vertical}
+  .chk{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px}
+  .modal .actions{display:flex;justify-content:space-between;margin-top:16px;gap:8px}
+  .hint{font-size:11px;color:var(--sub);margin-top:4px}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>📦 영업/PM E2E 트래킹 대시보드</h1>
+    <div class="today" id="todayLabel"></div>
+  </div>
+  <div class="toolbar">
+    <input id="search" placeholder="바이어/제품/메모 검색">
+    <select id="deptFilter"><option value="">전체 부서</option></select>
+    <button class="btn primary" id="addBtn">+ 신규 프로젝트</button>
+    <button class="btn" id="exportBtn">백업 저장</button>
+    <button class="btn" id="importBtn">백업 불러오기</button>
+    <input type="file" id="importFile" accept=".json" hidden>
+  </div>
+</header>
+
+<div class="summary" id="summary"></div>
+<div class="board" id="board"></div>
+
+<div class="modal-bg" id="modalBg">
+  <form class="modal" id="form">
+    <h3 id="modalTitle">신규 프로젝트</h3>
+    <label>바이어명</label>
+    <input type="text" id="fBuyer" required placeholder="예: Hince">
+    <label>제품명</label>
+    <input type="text" id="fProduct" required placeholder="예: 래디언스 밤">
+    <label>타겟 출고일 (Target Date)</label>
+    <input type="date" id="fDate" required>
+    <label>현재 쪼아야 할 타겟 부서</label>
+    <select id="fDept"></select>
+    <label>진행 단계 (칸반 컬럼)</label>
+    <select id="fStage"></select>
+    <label>세부 단계 (19단계 중)</label>
+    <select id="fStep"></select>
+    <label>Quick Action 메모 (이슈/협상 상태)</label>
+    <textarea id="fMemo" placeholder="예: T/T 50일 카운터 오퍼 대기 중&#10;게토바시 금형 지연으로 구매팀 푸시 중"></textarea>
+    <label class="chk"><input type="checkbox" id="fCritical"> 🚨 크리티컬 이슈 (여신 블락 등) → 빨간색 경고</label>
+    <label class="chk"><input type="checkbox" id="fDone"> ✅ 마감 완료 (경고 해제)</label>
+    <div class="hint">메모에 "블락", "여신 블락", "BLOCK" 이라는 단어가 있어도 자동으로 빨간색이 됩니다.</div>
+    <div class="actions">
+      <button type="button" class="btn danger" id="delBtn">삭제</button>
+      <span>
+        <button type="button" class="btn ghost" id="cancelBtn">취소</button>
+        <button type="submit" class="btn primary">저장</button>
+      </span>
+    </div>
+  </form>
+</div>
+
+<script>
+/* ============ 설정 영역 (필요하면 여기만 수정하세요) ============ */
+const STORAGE_KEY = "pm_e2e_tracker_v1";
+const WARN_DAYS = 3; // 출고일 며칠 전부터 노란색?
+
+const STAGES = [
+  {id:"sales", title:"영업/수주", sub:"Sales & PO · 1~4단계"},
+  {id:"dev",   title:"개발/서류", sub:"Dev & Docs · 5~11단계"},
+  {id:"mat",   title:"자재 트래킹", sub:"Material Tracking · 12~15단계"},
+  {id:"prod",  title:"생산", sub:"Production · 16~17단계"},
+  {id:"ship",  title:"출고/여신", sub:"Shipment & AR · 18~19단계"}
+];
+
+const DEPTS = ["영업본부","연구소","구매팀","생산팀","QA/QC","재무팀","물류/출고팀","디자인/패키징"];
+
+// 세부 단계 (첨부 표를 확인하지 못해 설명을 바탕으로 구성 → 실제 표에 맞게 문구만 수정하세요)
+const STEPS = {
+  sales:[ "1. 고객사 컨택","2. 샘플 의뢰","3. 단가/결제조건 협상","4. BULK 코드 생성" ],
+  dev:  [ "5. CT 요청","6. 문안 검수","7. PM차트 작성","8. 견적서 작성","9. 서류 확정","10. 발주서(PO) 확인","11. 수주 접수" ],
+  mat:  [ "12. 피그먼트 PT","13. 원료 관리","14. 부자재 입고 독촉","15. 자재 입고 완료 확인" ],
+  prod: [ "16. 제조(본제조)","17. 생산(총포장) 배차 확인" ],
+  ship: [ "18. QA/QC 통과·선적","19. 여신(Credit) 확인 및 마감" ]
+};
+/* ============================================================ */
+
+let cards = [];
+let editingId = null;
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+/* ---------- 저장/불러오기 ---------- */
+function load(){
+  try{ cards = JSON.parse(localStorage.getItem(STORAGE_KEY)) || null; }catch(e){ cards = null; }
+  if(!cards){
+    const d = n => { const t=new Date(); t.setDate(t.getDate()+n); return fmt(t); };
+    cards = [
+      {id:uid(),buyer:"Hince",product:"래디언스 밤",date:d(2),dept:"구매팀",stage:"mat",step:STEPS.mat[2],memo:"게토바시 금형 지연으로 구매팀 푸시 중",critical:false,done:false},
+      {id:uid(),buyer:"SAMPLE BUYER",product:"토너 패드",date:d(20),dept:"영업본부",stage:"sales",step:STEPS.sales[2],memo:"T/T 50일 카운터 오퍼 대기 중",critical:false,done:false},
+      {id:uid(),buyer:"SAMPLE BUYER 2",product:"립 틴트",date:d(-2),dept:"생산팀",stage:"prod",step:STEPS.prod[0],memo:"본제조 일정 지연",critical:false,done:false},
+      {id:uid(),buyer:"SAMPLE BUYER 3",product:"선크림",date:d(10),dept:"재무팀",stage:"ship",step:STEPS.ship[1],memo:"여신 블락 - 미수금 확인 필요",critical:true,done:false}
+    ];
+    save();
+  }
+}
+function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(cards)); }
+function uid(){ return "c" + Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+function fmt(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+
+/* ---------- 경고 판정 (핵심 수식) ---------- */
+function daysLeft(dateStr){
+  const [y,m,d] = dateStr.split("-").map(Number);
+  const target = new Date(y,m-1,d);
+  const now = new Date(); const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((target - today) / 86400000);
+}
+function alertLevel(c){
+  if(c.done) return "done";
+  const text = (c.memo||"").toUpperCase();
+  if(c.critical || text.includes("블락") || text.includes("BLOCK")) return "red";
+  const dl = daysLeft(c.date);
+  if(dl < 0) return "red";
+  if(dl <= WARN_DAYS) return "yellow";
+  return "ok";
+}
+function dLabel(c){
+  if(c.done) return {t:"완료",k:"d-ok"};
+  const dl = daysLeft(c.date);
+  if(dl < 0) return {t:"D+"+Math.abs(dl)+" 지연",k:"d-red"};
+  if(dl === 0) return {t:"D-Day",k:"d-red"};
+  return {t:"D-"+dl,k: dl<=WARN_DAYS ? "d-yellow":"d-ok"};
+}
+
+/* ---------- 화면 그리기 ---------- */
+function render(){
+  const q = $("#search").value.trim().toLowerCase();
+  const df = $("#deptFilter").value;
+  const list = cards.filter(c =>
+    (!df || c.dept===df) &&
+    (!q || (c.buyer+c.product+c.memo).toLowerCase().includes(q))
+  );
+
+  // 요약
+  const red = list.filter(c=>alertLevel(c)==="red").length;
+  const yel = list.filter(c=>alertLevel(c)==="yellow").length;
+  $("#summary").innerHTML =
+    `<div class="chip">전체 프로젝트<b>${list.length}</b></div>
+     <div class="chip red">🔴 지연/크리티컬<b>${red}</b></div>
+     <div class="chip yellow">🟡 D-${WARN_DAYS} 이내<b>${yel}</b></div>` +
+    DEPTS.map(d=>{ const n=list.filter(c=>c.dept===d && !c.done).length; return n?`<div class="chip">${esc(d)}<b>${n}</b></div>`:""; }).join("");
+
+  // 보드
+  const board = $("#board"); board.innerHTML = "";
+  STAGES.forEach(st=>{
+    const items = list.filter(c=>c.stage===st.id).sort((a,b)=>a.date.localeCompare(b.date));
+    const col = document.createElement("div"); col.className="col";
+    col.innerHTML = `<h2>${st.title}<span class="cnt">${items.length}</span><small>${st.sub}</small></h2>`;
+    const zone = document.createElement("div"); zone.className="dropzone"; zone.dataset.stage=st.id;
+    zone.addEventListener("dragover",e=>{e.preventDefault();zone.classList.add("over");});
+    zone.addEventListener("dragleave",()=>zone.classList.remove("over"));
+    zone.addEventListener("drop",e=>{
+      e.preventDefault(); zone.classList.remove("over");
+      const id = e.dataTransfer.getData("text/plain");
+      const c = cards.find(x=>x.id===id);
+      if(c && c.stage!==st.id){ c.stage = st.id; c.step = STEPS[st.id][0]; save(); render(); }
+    });
+    if(!items.length) zone.innerHTML = `<div class="empty">카드를 끌어다 놓으세요</div>`;
+    items.forEach(c=>zone.appendChild(makeCard(c)));
+    col.appendChild(zone); board.appendChild(col);
+  });
+}
+function makeCard(c){
+  const lvl = alertLevel(c), dl = dLabel(c);
+  const el = document.createElement("div");
+  el.className = "card " + (lvl==="ok"?"":lvl);
+  el.draggable = true;
+  el.innerHTML = `
+    <div class="row"><span class="buyer">${esc(c.buyer)}</span><span class="badge ${dl.k}">${dl.t}</span></div>
+    <div class="prod">${esc(c.product)}</div>
+    <div class="row"><span class="badge">📅 ${esc(c.date)}</span><span class="badge dept">👉 ${esc(c.dept)}</span></div>
+    <div class="row"><span class="badge">${esc(c.step||"")}</span>${lvl==="red"&&!c.done?'<span class="badge d-red">🚨 긴급</span>':""}</div>
+    ${c.memo?`<div class="memo">${esc(c.memo)}</div>`:""}`;
+  el.addEventListener("dragstart",e=>{ e.dataTransfer.setData("text/plain",c.id); el.classList.add("dragging"); });
+  el.addEventListener("dragend",()=>el.classList.remove("dragging"));
+  el.addEventListener("click",()=>openModal(c.id));
+  return el;
+}
+
+/* ---------- 입력 폼 ---------- */
+function fillSelects(){
+  $("#fDept").innerHTML = DEPTS.map(d=>`<option>${d}</option>`).join("");
+  $("#deptFilter").innerHTML = `<option value="">전체 부서</option>` + DEPTS.map(d=>`<option>${d}</option>`).join("");
+  $("#fStage").innerHTML = STAGES.map(s=>`<option value="${s.id}">${s.title} (${s.sub.split("·")[1].trim()})</option>`).join("");
+}
+function fillSteps(selected){
+  const arr = STEPS[$("#fStage").value] || [];
+  $("#fStep").innerHTML = arr.map(s=>`<option>${s}</option>`).join("");
+  if(selected && arr.includes(selected)) $("#fStep").value = selected;
+}
+$("#fStage").addEventListener("change",()=>fillSteps());
+
+function openModal(id){
+  editingId = id || null;
+  const c = id ? cards.find(x=>x.id===id) : null;
+  $("#modalTitle").textContent = c ? "프로젝트 수정" : "신규 프로젝트";
+  $("#fBuyer").value = c?.buyer || "";
+  $("#fProduct").value = c?.product || "";
+  $("#fDate").value = c?.date || fmt(new Date());
+  $("#fDept").value = c?.dept || DEPTS[0];
+  $("#fStage").value = c?.stage || "sales";
+  fillSteps(c?.step);
+  $("#fMemo").value = c?.memo || "";
+  $("#fCritical").checked = !!c?.critical;
+  $("#fDone").checked = !!c?.done;
+  $("#delBtn").style.visibility = c ? "visible" : "hidden";
+  $("#modalBg").classList.add("show");
+}
+function closeModal(){ $("#modalBg").classList.remove("show"); }
+
+$("#form").addEventListener("submit",e=>{
+  e.preventDefault();
+  const data = {
+    buyer:$("#fBuyer").value.trim(), product:$("#fProduct").value.trim(), date:$("#fDate").value,
+    dept:$("#fDept").value, stage:$("#fStage").value, step:$("#fStep").value,
+    memo:$("#fMemo").value, critical:$("#fCritical").checked, done:$("#fDone").checked
+  };
+  if(editingId){ Object.assign(cards.find(x=>x.id===editingId), data); }
+  else { cards.push({id:uid(), ...data}); }
+  save(); closeModal(); render();
+});
+$("#delBtn").addEventListener("click",()=>{
+  if(editingId && confirm("이 프로젝트를 삭제할까요?")){
+    cards = cards.filter(x=>x.id!==editingId); save(); closeModal(); render();
+  }
+});
+$("#cancelBtn").addEventListener("click",closeModal);
+$("#modalBg").addEventListener("mousedown",e=>{ if(e.target.id==="modalBg") closeModal(); });
+$("#addBtn").addEventListener("click",()=>openModal());
+$("#search").addEventListener("input",render);
+$("#deptFilter").addEventListener("change",render);
+
+/* ---------- 백업 ---------- */
+$("#exportBtn").addEventListener("click",()=>{
+  const blob = new Blob([JSON.stringify(cards,null,2)],{type:"application/json"});
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+  a.download = "pm_tracker_backup_"+fmt(new Date())+".json"; a.click();
+});
+$("#importBtn").addEventListener("click",()=>$("#importFile").click());
+$("#importFile").addEventListener("change",e=>{
+  const f = e.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = ()=>{ try{
+    const arr = JSON.parse(r.result);
+    if(!Array.isArray(arr)) throw 0;
+    if(confirm("현재 데이터를 백업 파일 내용으로 교체할까요?")){ cards = arr; save(); render(); }
+  }catch(err){ alert("올바른 백업 파일이 아닙니다."); } };
+  r.readAsText(f); e.target.value="";
+});
+
+/* ---------- 시작 ---------- */
+const now = new Date();
+$("#todayLabel").textContent = "오늘: " + fmt(now) + " (" + "일월화수목금토"[now.getDay()] + ")";
+fillSelects(); load(); render();
+setInterval(render, 60*60*1000); // 열어둔 채로 날짜가 바뀌어도 경고 갱신
+</script>
+</body>
+</html>
